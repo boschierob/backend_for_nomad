@@ -56,7 +56,7 @@ const register = async (req, res) => {
       error: v.errors
     })
   }
-  const checkEmail = await User.findOne({where: {email: req.body.email}})
+  const checkEmail = await User.findOne({email: req.body.email})
   if (checkEmail){
     return res.status(409).json({
       status: 409,
