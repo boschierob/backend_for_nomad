@@ -1,9 +1,9 @@
 const { Validator } = require('node-input-validator');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const { mailjet } = require('../../service/mailjet')
+const { mailjet } = require('../../services/mailjet')
 const generator = require('generate-password');
-const db = require('../../service/database');
+const db = require('../../services/database');
 const User = db.User;
 
 const login = async (req, res) => {

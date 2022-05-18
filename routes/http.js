@@ -5,6 +5,7 @@ const Auth = require('../controllers/http/AuthController.js')
 module.exports = (app) => {
 
   app.get('/', Home.getAll);
+  app.get('/secure', Home.secure);
 
   /*--- AUTH ---*/
   app.post('/auth/login', Auth.login);
