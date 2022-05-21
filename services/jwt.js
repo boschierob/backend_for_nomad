@@ -24,9 +24,22 @@ function jwtF(app) {
 
 async function isRevoked(req, payload) {
   let isIn = false
-  for (const key in protectedRoot[req.url]) {
-    if (payload.payload.role.includes(protectedRoot[req.url][key])) {
-      isIn = true
+  const urlCall = req.url.replace('/', '').split('/')
+  for (const key in protectedRoot) {
+    if (Object.keys(protectedRoot[key]).includes(req.method)) {
+      const splitUrl = key.split(':')
+      if (splitUrl.length > 1) {
+        const baseUrls = { url: splitUrl[0].replace(/\//g, ''), params: splitUrl.length - 1 }
+        if ((urlCall[0] === baseUrls.url) && (baseUrls.params == urlCall.length - 1)) {
+          if (payload.payload.role.some(item => protectedRoot[key][req.method].includes(item))) {
+            isIn = true
+          }
+        }
+      } else {
+        if (payload.payload.role.some(item => protectedRoot[key][req.method].includes(item))) {
+          isIn = true
+        }
+      }
     }
   }
   if (!isIn) {
