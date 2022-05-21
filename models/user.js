@@ -4,7 +4,7 @@ const { Schema } = mongoose;
 
 const User = new Schema({
   email: String,
-  role: String,
+  role: [{ type: String }],
   password: String,
   tokenResetPassword: String,
 }, {

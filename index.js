@@ -10,7 +10,7 @@ var bodyParser = require('body-parser');
 
 app.use(cors());
 app.use(bodyParser.json());
-app.use(jwt());
+app.use(jwt(app));
 
 const route = require('./routes/http')(app)
 const socket = require('./routes/WebSocket')(io)
