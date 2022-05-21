@@ -23,11 +23,15 @@ function jwtF(app) {
 }
 
 async function isRevoked(req, payload) {
+  let isIn = false
   for (const key in protectedRoot[req.url]) {
     if (payload.payload.role.includes(protectedRoot[req.url][key])) {
-      throw new UnauthorizedRoleError()
+      isIn = true
     }
-  } 
+  }
+  if (!isIn) {
+    throw new UnauthorizedRoleError()
+  }
 }
 
 class UnauthorizedRoleError extends Error {
