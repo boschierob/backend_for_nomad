@@ -3,8 +3,9 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { mailjet } = require('../../services/mailjet')
 const generator = require('generate-password');
-const db = require('../../services/database');
-const User = db.User;
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+const { v4: uuidv4 } = require('uuid'); // Add at the top for UUID generation
 
 const login = async (req, res) => {
   const v = new Validator(req.body, {
@@ -14,36 +15,37 @@ const login = async (req, res) => {
   const matched = await v.check();
   if (!matched) {
     return res.status(422).json({
-  		status: 422,
-  		error: v.errors
-  	})
+      status: 422,
+      error: v.errors
+    });
   }
-  let user = await User.findOne({email: req.body.email})
+  // Recherche l'utilisateur par email (findFirst car email n'est pas unique)
+  let user = await prisma.user.findFirst({ where: { email: req.body.email } });
   if (!user) {
     return res.status(401).json({
       status: 401,
       error: "Email don't match !"
-    })
+    });
   }
-  const compare = await bcrypt.compare(req.body.password, user.password)
-  if (compare){
+  const compare = await bcrypt.compare(req.body.password, user.encrypted_password);
+  if (compare) {
     const token = jwt.sign({ 
       identity: user.email,
       role: user.role
     }, process.env.APP_JWT, { expiresIn: '7d' });
-    const { password, ...userWithoutHash } = user.toObject();
+    const { encrypted_password, ...userWithoutHash } = user;
     return res.status(200).json({
       status: 200,
       data: {
         user: userWithoutHash,
         token: token
       }
-    })
+    });
   } else {
     return res.status(401).json({
       status: 401,
       error: "Password don't match !"
-    })
+    });
   }
 }
 
@@ -59,23 +61,35 @@ const register = async (req, res) => {
       error: v.errors
     })
   }
-  const checkEmail = await User.findOne({email: req.body.email})
-  if (checkEmail){
+  // Check if user already exists
+  const userExists = await prisma.user.findFirst({ where: { email: req.body.email } });
+  if (userExists) {
     return res.status(409).json({
       status: 409,
       message: "Email already exist !"
     })
   }
-  const user = new User();
-  user.email = req.body.email;
-  user.role = ['user']
-  user.password = await bcrypt.hashSync(req.body.password, 10);
-  await user.save()
+  // Hash password
+  const hashedPassword = await bcrypt.hash(req.body.password, 10);
+  // Génère un UUID pour le champ id
+  const id = uuidv4();
+  // Insert new user avec Prisma ORM
+  const user = await prisma.user.create({
+    data: {
+      id: id,
+      email: req.body.email,
+      encrypted_password: hashedPassword,
+      created_at: new Date(),
+      updated_at: new Date()
+    }
+  });
+  // Generate JWT token (optional, as before)
   const token = jwt.sign({
-      identity: user.email,
-      role: user.role
-    }, process.env.APP_JWT, { expiresIn: '7d' });
-  const { password, ...userWithoutHash } = user.toObject();
+    identity: req.body.email,
+    // role: user.role // if you want to include role
+  }, process.env.APP_JWT, { expiresIn: '7d' });
+  // Remove sensitive info from response
+  const { encrypted_password, ...userWithoutHash } = user;
   return res.status(200).json({
     status: 200,
     data: {
@@ -97,7 +111,7 @@ const forgetPassword = async (req, res) => {
   		error: v.errors
   	})
   }
-  const user = await User.findOne({email: req.body.email})
+  const user = await prisma.user.findUnique({ where: { email: req.body.email } });
   if (!user){
     return res.status(401).json({
       status: 401,
@@ -105,8 +119,10 @@ const forgetPassword = async (req, res) => {
     })
   }
   const key = generator.generate({length: 40, numbers: true});
-  user.tokenResetPassword = key;
-  await user.save()
+  await prisma.user.update({
+    where: { email: req.body.email },
+    data: { recovery_token: key, updated_at: new Date() }
+  });
   mailjet.post("send", {'version': 'v3.1'}).request({
     "Messages":[
       {
@@ -122,7 +138,7 @@ const forgetPassword = async (req, res) => {
         ],
         "Subject": "Réinitialisation mots de passe.",
         "TextPart": "Réinitialisation du mots de passe",
-        "HTMLPart": "<h3>Nous avons cru comprendre que vous vouliez réinitialiser votre mot de passe.<br>Cliquez sur le lien ci-dessous et vous serez redirigé vers un site sécurisé où vous pourrez définir un nouveau mot de passe.<br><br>  <a href='https://uslow.io/reset?token="+key+"'>Click ici</a>!</h3><br />L'équipe Uslow",
+        "HTMLPart": `<h3>Nous avons cru comprendre que vous vouliez réinitialiser votre mot de passe.<br>Cliquez sur le lien ci-dessous et vous serez redirigé vers un site sécurisé où vous pourrez définir un nouveau mot de passe.<br><br>  <a href='https://uslow.io/reset?token=${key}'>Click ici</a>!</h3><br />L'équipe Uslow`,
       }
     ]
   })
@@ -144,18 +160,18 @@ const resetPassword = async (req, res) => {
   		error: v.errors
   	})
   }
-  console.log(req.body.token)
-  const user = await User.findOne({ tokenResetPassword: req.body.token})
+  const user = await prisma.user.findFirst({ where: { recovery_token: req.body.token } });
   if (user) {
-    user.password = await bcrypt.hashSync(req.body.password, 10);
-    user.tokenResetPassword = null;
-    await user.save()
+    const hashedPassword = await bcrypt.hash(req.body.password, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { encrypted_password: hashedPassword, recovery_token: null, updated_at: new Date() }
+    });
     return res.status(200).json({
       status: 200,
       data: req.body.email
     })
   }
-
   return res.status(403).json({
     status: 403,
     data: "access forbidden"
@@ -163,10 +179,60 @@ const resetPassword = async (req, res) => {
   
 }
 
+const updateUser = async (req, res) => {
+  const v = new Validator(req.body, {
+    id: 'required',
+    email: 'email', // optionnel, mais si fourni doit être un email
+    role: 'string', // optionnel
+    // Ajoute ici d'autres champs modifiables si besoin
+  });
+  const matched = await v.check();
+  if (!matched) {
+    return res.status(422).json({
+      status: 422,
+      error: v.errors
+    });
+  }
+  // Prépare les données à mettre à jour (on ne met à jour que ce qui est fourni)
+  const { id, email, role } = req.body;
+  const dataToUpdate = {};
+  if (email !== undefined) dataToUpdate.email = email;
+  if (role !== undefined) dataToUpdate.role = role;
+  dataToUpdate.updated_at = new Date();
+
+  try {
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: dataToUpdate
+    });
+    const { encrypted_password, ...userWithoutHash } = updatedUser;
+    return res.status(200).json({
+      status: 200,
+      data: userWithoutHash
+    });
+  } catch (error) {
+    return res.status(404).json({
+      status: 404,
+      error: "User not found or update failed",
+      details: error.message
+    });
+  }
+}
+
+const logout = async (req, res) => {
+  // Si tu veux juste un logout stateless :
+  return res.status(200).json({
+    status: 200,
+    message: "Logged out. Please delete your token client-side."
+  });
+};
+
 
 module.exports = {
   login,
   register,
   forgetPassword,
   resetPassword,
+  updateUser,
+  logout,
 }
