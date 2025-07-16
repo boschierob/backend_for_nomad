@@ -42,7 +42,11 @@ module.exports = (app) => {
         process.env.APP_JWT,
         { expiresIn: '7d' }
       );
-      res.redirect(`http://localhost:8080/dashboard?token=${token}`);
+      // Redirection dynamique selon l'environnement
+      const frontendUrl = process.env.NODE_ENV === 'production'
+        ? process.env.FRONTEND_URL
+        : 'http://localhost:8080';
+      res.redirect(`${frontendUrl}/dashboard?token=${token}`);
     }
   );
 
