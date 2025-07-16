@@ -1,22 +1,15 @@
-const mongoose = require('mongoose');
+// Connexion à la base PostgreSQL Supabase via Prisma
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
-const connectionsString = process.env.MONGO_URL || "mongodb://localhost/yem-bqckend";
-
-mongoose.connect(connectionsString, {
-    useUnifiedTopology: true,
-    useNewUrlParser: true,
-});
-
-var db = mongoose.connection;
-db.on('error', function (e) {
-    console.log('bad to MongoDB', e);
-});
-db.once('open', function () {
-    console.log('Connected to MongoDB');
-});
-
-mongoose.Promise = global.Promise;
+// (Optionnel) Connexion au client Supabase JS si tu veux utiliser les services Supabase (auth, storage, etc)
+// Décommente les lignes suivantes si tu utilises aussi @supabase/supabase-js
+// const { createClient } = require('@supabase/supabase-js');
+// const supabaseUrl = process.env.SUPABASE_URL;
+// const supabaseKey = process.env.SUPABASE_KEY;
+// const supabase = createClient(supabaseUrl, supabaseKey);
 
 module.exports = {
-    User: require('./../models/user.js'),
+  prisma,
+  // supabase, // Décommente si tu utilises le client Supabase JS
 };

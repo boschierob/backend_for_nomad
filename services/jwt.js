@@ -15,10 +15,40 @@ function jwtF(app) {
         }
       }
     }
-  }, 1000)
+  }, 1000);
+
+  const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET;
   const APP_JWT = process.env.APP_JWT;
-  return jwt({ secret: APP_JWT, algorithms: ['HS256'], isRevoked }).unless({
-    path: unlessPath
+
+  if (!SUPABASE_JWT_SECRET && !APP_JWT) {
+    throw new Error('Neither SUPABASE_JWT_SECRET nor APP_JWT is defined in environment variables');
+  }
+
+  // Fonction de récupération du secret selon le token
+  const getSecret = (req, token) => {
+    console.log('JWT middleware called for:', req.path);
+    // On tente d'abord avec le secret Supabase
+    if (SUPABASE_JWT_SECRET) return SUPABASE_JWT_SECRET;
+    // Sinon, on utilise le secret local
+    return APP_JWT;
+  };
+
+  return jwt({
+    secret: getSecret,
+    algorithms: ['HS256'],
+    isRevoked
+  }).unless({
+    path: [
+      '/users',
+      /^\/users\/.*/,
+      '/auth/login',
+      '/auth/register',
+      '/auth/forgetpassword',
+      '/auth/reset',
+      '/db-test',
+      /^\/auth\/.*/,
+      ...unlessPath
+    ]
   });
 }
 

@@ -1,11 +1,35 @@
 const { Validator } = require('node-input-validator');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const { mailjet } = require('../../services/mailjet')
+const { mailjet } = require('../../services/mailjet');
 const generator = require('generate-password');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
-const { v4: uuidv4 } = require('uuid'); // Add at the top for UUID generation
+const { v4: uuidv4 } = require('uuid'); // Pour la génération d'UUID
+const { prisma } = require('../../services/database'); // Prisma centralisé
+const jwksClient = require('jwks-rsa');
+
+console.log('SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY);
+
+// Remplace <TON-PROJET> par le vrai nom de ton projet Supabase
+const client = jwksClient({
+  jwksUri: 'https://hvhpfjkiesiaygxycynt.supabase.co/auth/v1/jwks',
+  requestHeaders: {
+    apikey: process.env.SUPABASE_ANON_KEY
+  }
+});
+
+function getKey(header, callback, res) {
+  client.getSigningKey(header.kid, function(err, key) {
+    if (err || !key) {
+      console.error('[GoogleAuth] JWKS error:', err);
+      if (res) {
+        return res.status(500).json({ status: 500, error: "JWKS key not found", details: err?.message });
+      }
+      return callback(new Error('JWKS key not found'), null);
+    }
+    const signingKey = key.publicKey || key.rsaPublicKey;
+    callback(null, signingKey);
+  });
+}
 
 const login = async (req, res) => {
   const v = new Validator(req.body, {
@@ -47,7 +71,7 @@ const login = async (req, res) => {
       error: "Password don't match !"
     });
   }
-}
+};
 
 const register = async (req, res) => {
   const v = new Validator(req.body, {
@@ -59,7 +83,7 @@ const register = async (req, res) => {
     return res.status(422).json({
       status: 422,
       error: v.errors
-    })
+    });
   }
   // Check if user already exists
   const userExists = await prisma.user.findFirst({ where: { email: req.body.email } });
@@ -67,7 +91,7 @@ const register = async (req, res) => {
     return res.status(409).json({
       status: 409,
       message: "Email already exist !"
-    })
+    });
   }
   // Hash password
   const hashedPassword = await bcrypt.hash(req.body.password, 10);
@@ -96,27 +120,26 @@ const register = async (req, res) => {
       user: userWithoutHash,
       token: token
     }
-  })
-}
+  });
+};
 
 const forgetPassword = async (req, res) => {
-
   const v = new Validator(req.body, {
     email: 'required|email',
   });
   const matched = await v.check();
   if (!matched) {
     return res.status(422).json({
-  		status: 422,
-  		error: v.errors
-  	})
+      status: 422,
+      error: v.errors
+    });
   }
   const user = await prisma.user.findUnique({ where: { email: req.body.email } });
   if (!user){
     return res.status(401).json({
       status: 401,
       error: "Email don't match !"
-    })
+    });
   }
   const key = generator.generate({length: 40, numbers: true});
   await prisma.user.update({
@@ -141,12 +164,12 @@ const forgetPassword = async (req, res) => {
         "HTMLPart": `<h3>Nous avons cru comprendre que vous vouliez réinitialiser votre mot de passe.<br>Cliquez sur le lien ci-dessous et vous serez redirigé vers un site sécurisé où vous pourrez définir un nouveau mot de passe.<br><br>  <a href='https://uslow.io/reset?token=${key}'>Click ici</a>!</h3><br />L'équipe Uslow`,
       }
     ]
-  })
+  });
   return res.status(200).json({
     status: 200,
     data: req.body.email
-  })
-}
+  });
+};
 
 const resetPassword = async (req, res) => {
   const v = new Validator(req.body, {
@@ -156,9 +179,9 @@ const resetPassword = async (req, res) => {
   const matched = await v.check();
   if (!matched) {
     return res.status(422).json({
-  		status: 422,
-  		error: v.errors
-  	})
+      status: 422,
+      error: v.errors
+    });
   }
   const user = await prisma.user.findFirst({ where: { recovery_token: req.body.token } });
   if (user) {
@@ -170,14 +193,13 @@ const resetPassword = async (req, res) => {
     return res.status(200).json({
       status: 200,
       data: req.body.email
-    })
+    });
   }
   return res.status(403).json({
     status: 403,
     data: "access forbidden"
-  })
-  
-}
+  });
+};
 
 const updateUser = async (req, res) => {
   const v = new Validator(req.body, {
@@ -217,7 +239,7 @@ const updateUser = async (req, res) => {
       details: error.message
     });
   }
-}
+};
 
 const logout = async (req, res) => {
   // Si tu veux juste un logout stateless :
@@ -227,7 +249,6 @@ const logout = async (req, res) => {
   });
 };
 
-
 module.exports = {
   login,
   register,
@@ -235,4 +256,4 @@ module.exports = {
   resetPassword,
   updateUser,
   logout,
-}
+};
