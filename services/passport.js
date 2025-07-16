@@ -3,14 +3,15 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { prisma } = require('./database');
 
 // Gestion dynamique de la callback Google selon l'environnement
-defaultCallbackUrl = process.env.NODE_ENV === 'production'
-  ? 'https://ton-backend.onrender.com/auth/google/callback'
-  : 'http://localhost:5000/auth/google/callback';
+const isProd = process.env.NODE_ENV === 'production';
+const callbackUrl =
+  process.env.GOOGLE_CALLBACK_URL ||
+  (!isProd && 'http://localhost:5000/auth/google/callback'); // fallback uniquement en dev
 
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL || defaultCallbackUrl // Prend la variable d'env si dispo, sinon fallback
+    callbackURL: callbackUrl,
   },
   async (accessToken, refreshToken, profile, done) => {
     try {
