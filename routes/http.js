@@ -6,6 +6,7 @@ const UserManagement = require('../controllers/http/UserManagementController.js'
 const requireAdmin = require('../middleware/requireAdmin');
 const passport = require('../services/passport');
 const jwt = require('jsonwebtoken');
+const { prisma } = require('../services/database');
 
 
 module.exports = (app) => {
@@ -51,6 +52,18 @@ module.exports = (app) => {
   app.post('/users', requireAdmin, UserManagement.createUser);
   app.put('/users/:id', requireAdmin, UserManagement.updateUser);
   app.delete('/users/:id', requireAdmin, UserManagement.deleteUser);
+
+  // Route protégée pour récupérer l'utilisateur courant à partir du JWT
+  app.get('/me', authorisation, async (req, res) => {
+    try {
+      // req.user.id est injecté par le middleware authorisation (décodage du JWT)
+      const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+      if (!user) return res.status(404).json({ error: "User not found" });
+      res.json({ user });
+    } catch (e) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
 
   app.get('/admin/only', requireAdmin, (req, res) => {
     res.json({ message: 'Bienvenue, admin !' });
