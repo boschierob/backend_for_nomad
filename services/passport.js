@@ -1,12 +1,57 @@
 const passport = require('passport');
+const LocalStrategy = require('passport-local').Strategy;
+const { Strategy: JwtStrategy, ExtractJwt } = require('passport-jwt');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const bcrypt = require('bcrypt');
 const { prisma } = require('./database');
 
-// Gestion dynamique de la callback Google selon l'environnement
+// Stratégie locale (email/mot de passe)
+passport.use(new LocalStrategy({
+    usernameField: 'email',
+    passwordField: 'password'
+  },
+  async (email, password, done) => {
+    try {
+      const user = await prisma.user.findFirst({ where: { email } });
+      if (!user || !user.encrypted_password) {
+        return done(null, false, { message: 'Incorrect email or password.' });
+      }
+      const isMatch = await bcrypt.compare(password, user.encrypted_password);
+      if (!isMatch) {
+        return done(null, false, { message: 'Incorrect email or password.' });
+      }
+      return done(null, user);
+    } catch (err) {
+      return done(err);
+    }
+  }
+));
+
+// Stratégie JWT
+passport.use(new JwtStrategy({
+    jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+    secretOrKey: process.env.APP_JWT,
+  }, async (jwtPayload, done) => {
+    try {
+      // Utilise findFirst au lieu de findUnique pour l'email
+      const user = await prisma.user.findFirst({ where: { email: jwtPayload.identity } });
+      if (!user) {
+        console.error('Utilisateur non trouvé pour le JWT:', jwtPayload.identity);
+        return done(null, false);
+      }
+      return done(null, user);
+    } catch (err) {
+      console.error('Erreur dans la stratégie JWT:', err);
+      return done(err, false);
+    }
+  }
+));
+
+// Stratégie Google
 const isProd = process.env.NODE_ENV === 'production';
 const callbackUrl =
   process.env.GOOGLE_CALLBACK_URL ||
-  (!isProd && 'http://localhost:5000/auth/google/callback'); // fallback uniquement en dev
+  (!isProd && 'http://localhost:5000/auth/google/callback');
 
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
@@ -15,20 +60,11 @@ passport.use(new GoogleStrategy({
   },
   async (accessToken, refreshToken, profile, done) => {
     try {
-      console.log('Google profile:', profile);
-
-      // Vérifie la présence d'un email
       const email = profile.emails && profile.emails[0] && profile.emails[0].value;
-      if (!email) {
-        return done(new Error('No email found in Google profile'), null);
-      }
-
-      // Cherche l'utilisateur par email
+      if (!email) return done(new Error('No email found in Google profile'), null);
       let user = await prisma.user.findFirst({ where: { email } });
-
       if (!user) {
-        // Crée un nouvel utilisateur Google
-        const newUser = await prisma.user.create({
+        user = await prisma.user.create({
           data: {
             email,
             encrypted_password: null,
@@ -40,12 +76,9 @@ passport.use(new GoogleStrategy({
             created_at: new Date().toISOString()
           }
         });
-        user = newUser;
       }
-      console.log('User found/created:', user);
       return done(null, user);
     } catch (err) {
-      console.error('Error in GoogleStrategy:', err);
       return done(err, null);
     }
   }
