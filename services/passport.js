@@ -3,7 +3,8 @@ const LocalStrategy = require('passport-local').Strategy;
 const { Strategy: JwtStrategy, ExtractJwt } = require('passport-jwt');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const bcrypt = require('bcrypt');
-const { prisma } = require('./database');
+const { PrismaClient } = require(process.cwd() + '/node_modules/.prisma/client-auth');
+const prismaAuth = new PrismaClient();
 
 // Stratégie locale (email/mot de passe)
 passport.use(new LocalStrategy({
@@ -12,7 +13,7 @@ passport.use(new LocalStrategy({
   },
   async (email, password, done) => {
     try {
-      const user = await prisma.user.findFirst({ where: { email } });
+      const user = await prismaAuth.user.findFirst({ where: { email } });
       if (!user || !user.encrypted_password) {
         return done(null, false, { message: 'Incorrect email or password.' });
       }
@@ -34,7 +35,7 @@ passport.use(new JwtStrategy({
   }, async (jwtPayload, done) => {
     try {
       // Utilise findFirst au lieu de findUnique pour l'email
-      const user = await prisma.user.findFirst({ where: { email: jwtPayload.identity } });
+      const user = await prismaAuth.user.findFirst({ where: { email: jwtPayload.identity } });
       if (!user) {
         console.error('Utilisateur non trouvé pour le JWT:', jwtPayload.identity);
         return done(null, false);
@@ -62,9 +63,9 @@ passport.use(new GoogleStrategy({
     try {
       const email = profile.emails && profile.emails[0] && profile.emails[0].value;
       if (!email) return done(new Error('No email found in Google profile'), null);
-      let user = await prisma.user.findFirst({ where: { email } });
+      let user = await prismaAuth.user.findFirst({ where: { email } });
       if (!user) {
-        user = await prisma.user.create({
+        user = await prismaAuth.user.create({
           data: {
             email,
             encrypted_password: null,
@@ -89,7 +90,7 @@ passport.serializeUser((user, done) => {
 });
 passport.deserializeUser(async (id, done) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id } });
+    const user = await prismaAuth.user.findUnique({ where: { id } });
     if (!user) return done(null, false);
     done(null, user);
   } catch (err) {
