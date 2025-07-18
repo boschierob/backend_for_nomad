@@ -58,6 +58,7 @@ const login = (req, res, next) => {
 // Google callback: génère un JWT pour l'utilisateur Google
 const googleCallback = (req, res, next) => {
   passport.authenticate('google', { session: false }, (err, user, info) => {
+    console.log('Google callback:', { err, user, info });
     if (err || !user) {
       return res.status(401).json({ status: 401, error: info ? info.message : 'Google login failed' });
     }

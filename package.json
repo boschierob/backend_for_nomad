@@ -24,19 +24,19 @@
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
     "pg": "^8.16.3",
-    "prisma": "^6.11.1",
     "sequelize-cli": "^6.2.0",
     "socket.io": "^4.0.0",
     "swagger-ui-express": "^4.3.0",
     "uuid": "^11.1.0"
   },
   "scripts": {
-    "dev": "cpy .env.pooler . --rename=.env && nodemon index.js",
+    "dev": "cpy .env.direct . --rename=.env && nodemon index.js",
     "migrate:dev": "cpy .env.direct .env && npx prisma migrate dev",
     "migrate:deploy": "cpy .env.direct .env && npx prisma migrate deploy",
     "studio": "cpy .env.direct .env && npx prisma studio"
   },
   "devDependencies": {
-    "cpy-cli": "^5.0.0"
+    "cpy-cli": "^5.0.0",
+    "prisma": "^6.12.0"
   }
 }

@@ -1,5 +1,6 @@
 const Home = require('../controllers/http/HomeController.js');
 const Auth = require('../controllers/http/AuthController.js');
+const Questionnaire = require('../controllers/http/QuestionnaireController.js');
 const passport = require('../services/passport');
 
 module.exports = (app) => {
@@ -19,4 +20,7 @@ module.exports = (app) => {
 
   // Profile (JWT protected)
   app.get('/auth/profile', passport.authenticate('jwt', { session: false }), Auth.profile);
+
+  // Questionnaire
+  app.use('/api', Questionnaire);
 };

@@ -61,9 +61,19 @@ passport.use(new GoogleStrategy({
   },
   async (accessToken, refreshToken, profile, done) => {
     try {
+      // Log pour debug
+      console.log('Google profile:', profile);
+
       const email = profile.emails && profile.emails[0] && profile.emails[0].value;
-      if (!email) return done(new Error('No email found in Google profile'), null);
+      if (!email) {
+        console.error('No email found in Google profile');
+        return done(new Error('No email found in Google profile'), null);
+      }
+
+      // Recherche de l'utilisateur
       let user = await prismaAuth.user.findFirst({ where: { email } });
+
+      // Création automatique si non trouvé
       if (!user) {
         user = await prismaAuth.user.create({
           data: {
@@ -77,9 +87,12 @@ passport.use(new GoogleStrategy({
             created_at: new Date().toISOString()
           }
         });
+        console.log('Nouvel utilisateur Google créé:', user);
       }
+
       return done(null, user);
     } catch (err) {
+      console.error('Erreur stratégie Google:', err);
       return done(err, null);
     }
   }
