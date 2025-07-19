@@ -14,12 +14,15 @@ router.post('/questionnaire', async (req, res) => {
   }
 
   try {
+    const data = {
+      answers,
+      anonymous: !!anonymous,
+    };
+    if (profileId) {
+      data.profile = { connect: { id: profileId } };
+    }
     const response = await prisma.questionnaireResponse.create({
-      data: {
-        answers,
-        profile_id: profileId || null, // null si anonyme
-        anonymous: !!anonymous,
-      }
+      data
     });
     console.log('POST /questionnaire - success:', response);
     res.status(201).json({ success: true, data: response });
