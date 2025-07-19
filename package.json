@@ -31,6 +31,7 @@
   },
   "scripts": {
     "dev": "cpy .env.direct . --rename=.env && nodemon index.js",
+    "start": "node index.js",
     "migrate:dev": "cpy .env.direct .env && npx prisma migrate dev",
     "migrate:deploy": "cpy .env.direct .env && npx prisma migrate deploy",
     "studio": "cpy .env.direct .env && npx prisma studio"
