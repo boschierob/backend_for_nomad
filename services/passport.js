@@ -3,8 +3,7 @@ const LocalStrategy = require('passport-local').Strategy;
 const { Strategy: JwtStrategy, ExtractJwt } = require('passport-jwt');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const bcrypt = require('bcrypt');
-const { PrismaClient } = require(process.cwd() + '/node_modules/.prisma/client-auth');
-const prismaAuth = new PrismaClient();
+const { prisma } = require('./database');
 
 // Stratégie locale (email/mot de passe)
 passport.use(new LocalStrategy({
@@ -13,7 +12,7 @@ passport.use(new LocalStrategy({
   },
   async (email, password, done) => {
     try {
-      const user = await prismaAuth.user.findFirst({ where: { email } });
+      const user = await prisma.user.findFirst({ where: { email } });
       if (!user || !user.encrypted_password) {
         return done(null, false, { message: 'Incorrect email or password.' });
       }
@@ -35,7 +34,7 @@ passport.use(new JwtStrategy({
   }, async (jwtPayload, done) => {
     try {
       // Utilise findFirst au lieu de findUnique pour l'email
-      const user = await prismaAuth.user.findFirst({ where: { email: jwtPayload.identity } });
+      const user = await prisma.user.findFirst({ where: { email: jwtPayload.identity } });
       if (!user) {
         console.error('Utilisateur non trouvé pour le JWT:', jwtPayload.identity);
         return done(null, false);
@@ -61,7 +60,6 @@ passport.use(new GoogleStrategy({
   },
   async (accessToken, refreshToken, profile, done) => {
     try {
-      // Log pour debug
       console.log('Google profile:', profile);
 
       const email = profile.emails && profile.emails[0] && profile.emails[0].value;
@@ -70,12 +68,11 @@ passport.use(new GoogleStrategy({
         return done(new Error('No email found in Google profile'), null);
       }
 
-      // Recherche de l'utilisateur
-      let user = await prismaAuth.user.findFirst({ where: { email } });
+      // Recherche de l'utilisateur dans le schéma public
+      let user = await prisma.user.findFirst({ where: { email } });
 
-      // Création automatique si non trouvé
       if (!user) {
-        user = await prismaAuth.user.create({
+        user = await prisma.user.create({
           data: {
             email,
             encrypted_password: null,
@@ -84,10 +81,33 @@ passport.use(new GoogleStrategy({
               name: profile.displayName,
               avatar: profile.photos?.[0]?.value
             },
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            // Création du profil lié
+            profile: {
+              create: {
+                bio: profile.displayName || null,
+                avatarurl: profile.photos?.[0]?.value || null,
+                // Ajoute d'autres champs si besoin
+              }
+            }
+          },
+          include: { profile: true } // Pour retourner aussi le profil créé
+        });
+        console.log('Nouvel utilisateur Google + profil créés:', user);
+      } else {
+        // Mise à jour du profil existant
+        await prisma.profile.update({
+          where: { userId: user.id },
+          data: {
+            bio: profile.displayName || null,
+            avatarurl: profile.photos?.[0]?.value || null,
           }
         });
-        console.log('Nouvel utilisateur Google créé:', user);
+        // (Optionnel) Récupère le profil mis à jour pour le retourner
+        user = await prisma.user.findUnique({
+          where: { id: user.id },
+          include: { profile: true }
+        });
       }
 
       return done(null, user);
@@ -103,7 +123,7 @@ passport.serializeUser((user, done) => {
 });
 passport.deserializeUser(async (id, done) => {
   try {
-    const user = await prismaAuth.user.findUnique({ where: { id } });
+    const user = await prisma.user.findUnique({ where: { id } });
     if (!user) return done(null, false);
     done(null, user);
   } catch (err) {

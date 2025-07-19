@@ -1,9 +1,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { Validator } = require('node-input-validator');
-// const { prisma } = require('../../services/database');
-const { PrismaClient } = require(process.cwd() + '/node_modules/.prisma/client-auth');
-const prismaAuth = new PrismaClient();
+const { prisma } = require('../../services/database');
 const passport = require('../../services/passport');
 
 // Register: création d'un utilisateur local
@@ -16,18 +14,25 @@ const register = async (req, res) => {
   if (!matched) {
     return res.status(422).json({ status: 422, error: v.errors });
   }
-  const userExists = await prismaAuth.user.findFirst({ where: { email: req.body.email } });
+  const userExists = await prisma.user.findFirst({ where: { email: req.body.email } });
   if (userExists) {
     return res.status(409).json({ status: 409, message: "Email already exists!" });
   }
   const hashedPassword = await bcrypt.hash(req.body.password, 10);
-  const user = await prismaAuth.user.create({
+  const user = await prisma.user.create({
     data: {
       email: req.body.email,
       encrypted_password: hashedPassword,
       created_at: new Date(),
-      updated_at: new Date()
-    }
+      updated_at: new Date(),
+      profile: {
+        create: {
+          bio: null,
+          avatarurl: null,
+        }
+      }
+    },
+    include: { profile: true }
   });
   const { encrypted_password, ...userWithoutHash } = user;
   return res.status(201).json({ status: 201, data: userWithoutHash });
